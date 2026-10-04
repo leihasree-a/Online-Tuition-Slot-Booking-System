@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.DS_Store
+.env
+.env.*
+*.class
+target/
+.idea/
+.vscode/
+*.iml
+npm-debug.log*
