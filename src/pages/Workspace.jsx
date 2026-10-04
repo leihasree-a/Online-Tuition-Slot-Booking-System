@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { LayoutDashboard, UsersRound, GraduationCap, CalendarDays, CalendarCheck, CreditCard, ClipboardCheck, Settings, LogOut, Bell, Search, Menu, Plus, ArrowUpRight, Clock3, BookOpen, Sparkles, Eye, EyeOff, X, Check, ChevronRight, SlidersHorizontal, TrendingUp, FileText, CircleHelp, MoreHorizontal } from 'lucide-react'
 import Brand from '../components/Brand.jsx'
 import { Avatar, Status, PageHeading, SearchBox, Select, Modal, EmptyState } from '../components/Ui.jsx'
 import { students as seedStudents, tutors, bookings, payments, attendanceSeed, slots } from '../data/mockData.js'
 import { mockService } from '../utils/mockService.js'
+import { getAvailability } from '../utils/api.js'
 
 const nav = [
   { label: 'Dashboard', icon: LayoutDashboard }, { label: 'Students', icon: UsersRound }, { label: 'Tutors', icon: GraduationCap },
@@ -89,11 +90,154 @@ function Field({ label, name, type = 'text', ...props }) { return <label classNa
 function TutorsPage({ tutors: shown, query, setQuery }) { return <><PageHeading title="Tutors" subtitle="Meet the educators supporting your students." action={<button className="btn btn-primary" onClick={() => window.alert('Tutor onboarding is a demo-only placeholder.')}><Plus size={17} /> Add tutor</button>} /><div className="page-toolbar"><SearchBox value={query} onChange={setQuery} placeholder="Search tutors or subjects..." /><Select defaultValue="All subjects"><option>All subjects</option><option>Mathematics</option><option>Physics</option><option>Chemistry</option><option>English</option></Select><span className="toolbar-count">{shown.length} tutors</span></div><div className="tutor-grid">{shown.map(t => <article className="panel tutor-card" key={t.id}><div className="tutor-card-top"><Avatar name={t.name} color={t.color} /><button className="icon-btn" aria-label="Tutor actions"><MoreHorizontal size={19} /></button></div><div className="tutor-name-row"><h2>{t.name}</h2><span className="rating">★ {t.rating}</span></div><p className="tutor-subject">{t.subject}<span />{t.experience} experience</p><div className="tutor-divider" /><div className="tutor-details"><span><span className="detail-icon"><GraduationCap size={15} /></span>{t.id}</span><span><span className="detail-icon"><CalendarDays size={15} /></span>{t.availability}</span><span><span className="detail-icon"><BookOpen size={15} /></span>{t.email}</span></div><div className="tutor-card-foot"><Status>{t.status}</Status><button className="text-link" onClick={() => window.alert(`Contact ${t.name} at ${t.email}`)}>View profile <ArrowUpRight size={13} /></button></div></article>)}</div></> }
 
 function AvailabilityPage({ notify }) {
-  const [tutor, setTutor] = useState('Priya Sharma')
-  const [date, setDate] = useState(today)
-  const [selected, setSelected] = useState('05:00 PM')
-  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-  return <><PageHeading title="Availability" subtitle="Explore tutor schedules and find a time that works." action={<button className="btn btn-secondary" onClick={() => notify('Availability export prepared for this demo')}><FileText size={15} /> Export schedule</button>} /><section className="panel availability-controls"><label className="field-label">Select tutor<Select value={tutor} onChange={setTutor}>{tutors.map(t => <option key={t.id}>{t.name}</option>)}</Select></label><label className="field-label">Choose a date<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><div className="availability-meta"><span><span className="legend-dot available-dot" /> Available</span><span><span className="legend-dot unavailable-dot" /> Unavailable</span><span><span className="legend-dot selected-dot" /> Selected</span></div></section><section className="panel availability-panel"><div className="panel-head"><div><div className="section-label">WEEKLY SCHEDULE</div><h2>{tutor} <span className="availability-sub">· Week of October 5</span></h2></div><button className="date-switch" onClick={() => setDate(date === today ? '2026-10-15' : today)}><ChevronRight size={14} className="chev-left" /> Oct 5 – 11, 2026 <ChevronRight size={14} /></button></div><div className="schedule-grid"><div className="schedule-corner">TIME</div>{days.map((d,i) => <div className={`schedule-day ${d === 'Thursday' ? 'today-col' : ''}`} key={d}><strong>{d.slice(0,3).toUpperCase()}</strong><span>{i+5}</span></div>)}{slots.map((slot,si) => <React.Fragment key={slot}><div className="schedule-time">{slot}</div>{days.map((day,di) => { const busy = (si + di * 2) % 5 === 0 || (di === 6 && si > 1) || (di === 0 && si === 2); const isSelected = !busy && selected === slot && day === 'Thursday'; return <button key={`${slot}${day}`} disabled={busy} onClick={() => { setSelected(slot); notify(`${day}, ${slot} selected`) }} className={`schedule-cell ${busy ? 'busy' : ''} ${isSelected ? 'picked' : ''}`} aria-label={`${day} ${slot} ${busy ? 'unavailable' : 'available'}`}>{busy ? <span>Booked</span> : isSelected ? <span>Selected</span> : <span>Available</span>}</button> })}</React.Fragment>)}</div><div className="schedule-note"><span><Clock3 size={15} /> Sessions are 60 minutes. Times are shown in your local timezone.</span><button onClick={() => notify('Schedule shown is mock data only')}>About availability <ArrowUpRight size={13} /></button></div></section></>
+
+    const [tutor, setTutor] = useState('1')
+    const [date, setDate] = useState('2026-10-05')
+    const [availability, setAvailability] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    useEffect(() => {
+
+        async function loadAvailability() {
+
+            setLoading(true)
+            setError('')
+
+            try {
+
+                const data = await getAvailability(tutor)
+
+                setAvailability(data)
+
+            } catch (err) {
+
+                console.error(err)
+                setError('Could not load availability.')
+
+            } finally {
+
+                setLoading(false)
+            }
+        }
+
+        loadAvailability()
+
+    }, [tutor])
+
+
+    const filteredSlots = availability.filter(
+        slot => slot.date === date
+    )
+
+
+    return (
+        <>
+            <PageHeading
+                title="Availability"
+                subtitle="Explore tutor schedules and find a time that works."
+            />
+
+            <section className="panel availability-controls">
+
+                <label className="field-label">
+                    Select tutor
+
+                    <Select
+                        value={tutor}
+                        onChange={e => setTutor(e.target.value)}
+                    >
+                        <option value="1">
+                            Tutor 1
+                        </option>
+                    </Select>
+                </label>
+
+
+                <label className="field-label">
+                    Choose a date
+
+                    <input
+                        type="date"
+                        value={date}
+                        onChange={e => setDate(e.target.value)}
+                    />
+                </label>
+
+            </section>
+
+
+            <section className="panel availability-panel">
+
+                <div className="panel-head">
+
+                    <div>
+
+                        <div className="section-label">
+                            DATABASE AVAILABILITY
+                        </div>
+
+                        <h2>
+                            Available slots
+                        </h2>
+
+                    </div>
+
+                </div>
+
+
+                {loading && (
+                    <p>
+                        Loading availability...
+                    </p>
+                )}
+
+
+                {error && (
+                    <p className="form-error">
+                        {error}
+                    </p>
+                )}
+
+
+                {!loading && !error && (
+                    <div className="schedule-grid">
+
+                        {filteredSlots.length === 0 ? (
+
+                            <p>
+                                No availability found for this date.
+                            </p>
+
+                        ) : (
+
+                            filteredSlots.map(slot => (
+
+                                <div
+                                    key={slot.availabilityId}
+                                    className="schedule-cell"
+                                >
+
+                                    <strong>
+                                        {slot.startTime} - {slot.endTime}
+                                    </strong>
+
+                                    <span>
+                                        {slot.status}
+                                    </span>
+
+                                </div>
+
+                            ))
+
+                        )}
+
+                    </div>
+                )}
+
+            </section>
+        </>
+    )
 }
 
 function BookingsPage({ list, students, setBookingList, openBooking, showBooking, setModal, query, setQuery, notify }) { return <><PageHeading title="Bookings" subtitle="Coordinate lessons and keep every session on track." action={<button className="btn btn-primary" onClick={openBooking}><Plus size={17} /> Book a class</button>} /><div className="booking-summary"><div><span>UPCOMING SESSIONS</span><strong>{list.length.toString().padStart(2,'0')}</strong></div><div><span>THIS WEEK</span><strong>12</strong></div><div><span>NEEDS CONFIRMATION</span><strong>03</strong></div></div><div className="page-toolbar"><SearchBox value={query} onChange={setQuery} placeholder="Search bookings..." /><Select defaultValue="All statuses"><option>All statuses</option><option>Confirmed</option><option>Pending</option></Select><Select defaultValue="All dates"><option>All dates</option><option>This week</option><option>This month</option></Select><span className="toolbar-count">{list.length} bookings</span></div><section className="panel data-panel"><div className="table-scroll"><table><thead><tr><th>STUDENT</th><th>TUTOR</th><th>SUBJECT</th><th>DATE</th><th>TIME</th><th>STATUS</th><th></th></tr></thead><tbody>{list.map((b,i)=><tr key={i}><td><div className="person-cell"><Avatar name={b.student} color={['lilac','blue','peach','mint'][i%4]} small /><strong>{b.student}</strong></div></td><td>{b.tutor}</td><td>{b.subject}</td><td>{b.date}</td><td>{b.time}</td><td><Status>{b.status}</Status></td><td><button className="row-view" onClick={() => notify(`Booking for ${b.student}: ${b.subject}, ${b.date} at ${b.time}`)}>Details</button></td></tr>)}</tbody></table>{!list.length && <EmptyState title="No matching bookings" detail="Try a different search." />}</div><div className="table-footer"><span>Showing <b>{list.length}</b> sessions</span><span>Updated just now</span></div></section>{showBooking && <BookingModal onClose={() => setModal(null)} students={students} onSave={async b => { const saved=await mockService.saveBooking(b); setBookingList(curr => [saved,...curr]); notify('Class booked successfully') }} />}</> }
